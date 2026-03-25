@@ -1,11 +1,160 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus</title>
-    </head>
-    <body>
-        PakePlus
-    </body>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+    <title>违停黑名单</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system, BlinkMacSystemFont, sans-serif}
+        body{background:#f4f6f8;padding:15px}
+        .card{background:white;border-radius:20px;padding:20px;margin-bottom:15px;box-shadow:0 4px 12px rgba(0,0,0,0.05)}
+        h2{text-align:center;margin-bottom:15px}
+        .row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+        input,select,button{padding:12px;border-radius:12px;border:1px solid #ddd;flex:1;min-width:110px;font-size:15px}
+        button{background:#007bff;color:white;font-weight:bold;border:none}
+        .photo{background:#28a745}
+        .del{background:#dc3545}
+        button:disabled{background:#ccc}
+        .preview{margin:10px 0}
+        .preview img{width:80px;height:80px;border-radius:12px}
+        table{width:100%;border-collapse:collapse;margin-top:10px}
+        th,td{border:1px solid #eee;padding:8px;text-align:center}
+        th{background:#f9f9f9}
+        .tip{text-align:center;font-size:12px;color:#666;margin-top:10px}
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🚔 违停黑名单管理</h2>
+    <div class="row">
+        <input id="user" value="管理员" placeholder="操作人">
+        <input id="car" placeholder="车牌号" value="辽B">
+        <select id="day">
+            <option value="7">7天</option>
+            <option value="14">14天</option>
+            <option value="30">30天</option>
+        </select>
+    </div>
+    <div class="row">
+        <button class="photo" onclick="pickPhoto()">📷 上传照片</button>
+        <button onclick="add()" id="addBtn" disabled>添加记录</button>
+        <button class="del" onclick="del()">删除选中</button>
+    </div>
+    <div class="row">
+        <button onclick="exportData()">导出数据</button>
+        <button onclick="importData()">导入数据</button>
+    </div>
+    <div class="preview" id="preview"></div>
+    <table>
+        <tr><th>选</th><th>车牌</th><th>日期</th><th>到期</th><th>剩余</th><th>照片</th></tr>
+        <tbody id="list"></tbody>
+    </table>
+    <div class="tip" id="log"></div>
+</div>
+
+<input type="file" id="photoInput" accept="image/*" style="display:none">
+
+<script>
+let data = JSON.parse(localStorage.getItem("blacklist")) || [];
+let selected = -1;
+let tempImg = "";
+
+window.onload = render;
+
+function render() {
+    let html = "";
+    data.forEach((item, i) => {
+        let left = Math.ceil((new Date(item.expireTime) - new Date()) / 86400000);
+        left = left < 0 ? 0 : left;
+        let imgHtml = item.img ? `<img src="${item.img}" width="40" height="40">` : "无";
+        html += `<tr onclick="selected=${i}" style="${selected==i?'background:#e3f2fd':''}">
+            <td>●</td>
+            <td>${item.car}</td>
+            <td>${item.createTime}</td>
+            <td>${item.expireTime}</td>
+            <td>${left}天</td>
+            <td>${imgHtml}</td>
+        </tr>`;
+    });
+    document.getElementById("list").innerHTML = html;
+    document.getElementById("log").innerText = "✅ 必须上传照片才能添加";
+}
+
+function pickPhoto() {
+    document.getElementById("photoInput").click();
+}
+
+document.getElementById("photoInput").onchange = function(e) {
+    let file = e.target.files[0];
+    if (!file) return;
+    let reader = new FileReader();
+    reader.onload = function(ev) {
+        let img = new Image();
+        img.onload = function() {
+            let canvas = document.createElement("canvas");
+            let max = 1000;
+            let w = img.width, h = img.height;
+            if (w > h && w > max) { h *= max/w; w = max; }
+            else if (h > max) { w *= max/h; h = max; }
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext("2d").drawImage(img,0,0,w,h);
+            tempImg = canvas.toDataURL("image/jpeg",0.7);
+            document.getElementById("preview").innerHTML = `<img src="${tempImg}">`;
+            document.getElementById("addBtn").disabled = false;
+        }
+        img.src = ev.target.result;
+    }
+    reader.readAsDataURL(file);
+};
+
+function add() {
+    if (!tempImg) { alert("必须上传照片！"); return; }
+    let car = document.getElementById("car").value.trim();
+    if (!car) { alert("请输入车牌"); return; }
+    let now = new Date();
+    let create = now.toLocaleDateString();
+    let expire = new Date(now.getTime() + document.getElementById("day").value * 86400000).toLocaleDateString();
+    data.push({ car, user:document.getElementById("user").value, createTime:create, expireTime:expire, img:tempImg });
+    localStorage.setItem("blacklist", JSON.stringify(data));
+    tempImg = "";
+    document.getElementById("preview").innerHTML = "";
+    document.getElementById("addBtn").disabled = true;
+    render();
+}
+
+function del() {
+    if (selected < 0) { alert("请选择记录"); return; }
+    data.splice(selected, 1);
+    selected = -1;
+    localStorage.setItem("blacklist", JSON.stringify(data));
+    render();
+}
+
+function exportData() {
+    let blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "违停黑名单.json";
+    a.click();
+}
+
+function importData() {
+    let inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = ".json";
+    inp.onchange = e => {
+        let r = new FileReader();
+        r.onload = ev => {
+            data = JSON.parse(ev.target.result);
+            localStorage.setItem("blacklist", JSON.stringify(data));
+            render();
+        }
+        r.readAsText(e.target.files[0]);
+    }
+    inp.click();
+}
+</script>
+</body>
 </html>
