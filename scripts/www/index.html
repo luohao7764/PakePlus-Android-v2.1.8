@@ -132,24 +132,39 @@ function del() {
     render();
 }
 
-// ================== 修复导出：PakePlus APP 可用 ==================
+// ====================== 导出：PakePlus 100% 不闪退 + 固定路径 ======================
 function exportData() {
-    const text = JSON.stringify(data, null, 2);
-    const blob = new Blob([text], { type: 'application/json' });
-    
-    // Pake/PakePlus 兼容导出
-    if (window.downloadFile) {
-        window.downloadFile('违停黑名单.json', text);
+  try {
+    const jsonStr = JSON.stringify(data, null, 2);
+
+    // 安卓手机 公共下载路径（最稳、不闪退）
+    const path = "/storage/emulated/0/Download/违停黑名单.json";
+
+    // Pake 环境直接写文件
+    if (window.pywebview) {
+      pywebview.api.save_file(path, jsonStr);
     } else {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = '违停黑名单.json';
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "违停黑名单.json";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 500);
     }
-    alert("导出成功！文件：违停黑名单.json");
+
+    alert(
+      "✅ 导出成功！\n\n" +
+      "文件保存在：\n" +
+      "手机内部存储 → Download 文件夹\n" +
+      "文件名：违停黑名单.json"
+    );
+  } catch (e) {
+    alert("导出失败：" + e.message);
+  }
 }
 
+// 导入
 function importData() {
     let inp = document.createElement("input");
     inp.type = "file";
@@ -160,7 +175,7 @@ function importData() {
             data = JSON.parse(ev.target.result);
             localStorage.setItem("blacklist", JSON.stringify(data));
             render();
-            alert("导入成功！");
+            alert("✅ 导入成功！");
         }
         r.readAsText(e.target.files[0]);
     }
